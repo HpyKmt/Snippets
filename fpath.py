@@ -3,7 +3,55 @@ import shutil
 import re
 
 
-class _FPath:
+__version__ = '0.0.0'
+
+
+class Prompt:
+    """ Prompt user for file/directory path from console user interface"""
+
+    def __init__(self, msg='Drag and drop your file/folder: '):
+        """
+        Constructor
+        :param msg: message to prompt user to input file or folder.
+        """
+        self.msg = msg
+
+    def get_file(self):
+        while True:
+            path_in = input(self.msg).replace('"', '')
+            if os.path.isfile(path_in):
+                print(f'INFO: {path_in} is a valid file path.')
+                return path_in
+            else:
+                print(f'ERROR: {path_in} is not a valid file path!')
+
+    def get_dir(self):
+        while True:
+            path_in = input(self.msg).replace('"', '')
+            if os.path.isdir(path_in):
+                print(f'INFO: {path_in} is a valid directory path.')
+                return path_in
+            else:
+                print(f'ERROR: {path_in} is not a valid directory path!')
+
+    def get_file_or_dir(self):
+        while True:
+            path_in = input(self.msg).replace('"', '')
+            if os.path.isdir(path_in):
+                print(f'INFO: {path_in} is a valid directory path.')
+                return path_in
+            elif os.path.isfile(path_in):
+                print(f'INFO: {path_in} is a valid file path.')
+                return path_in
+            else:
+                print(f'ERROR: {path_in} is not a valid directory path!')
+
+
+class Mapper:
+    """ フォルダをマッピングする。
+    効率化の為、returnせずにyieldする。
+    変数はファイルを探すか、フォルダを探すか、再帰するか、しないか。"""
+
     def __init__(self, path_in):
         """
         Constructor
@@ -55,8 +103,9 @@ class _FPath:
             raise ValueError(f'self.path_in "{self.path_in}" is not a valid path in this system!')
 
 
-class Search:
-    """ The user can import this class and use those static methods to get the files/folders they need"""
+class Filter:
+    """ 通常はファイルやフォルダの名称や拡張子で目的のファイルを取得する.
+    複雑な場合は正規表現を使って選別する。"""
     @staticmethod
     def by_base_name(path_in, base_name='__pycache__', search_type='dir', recursive=True):
         """
@@ -67,7 +116,7 @@ class Search:
         :param recursive: True | False
         :return: Absolute Path
         """
-        for fp in _FPath(path_in).path_generator(search_type=search_type, recursive=recursive):
+        for fp in Mapper(path_in).path_generator(search_type=search_type, recursive=recursive):
             if os.path.basename(fp).upper() == base_name.upper():
                 yield fp
 
@@ -82,7 +131,7 @@ class Search:
         :param recursive: True | False
         :return: absolute file path
         """
-        for fp in _FPath(path_in).path_generator(search_type='file', recursive=recursive):
+        for fp in Mapper(path_in).path_generator(search_type='file', recursive=recursive):
             if os.path.splitext(fp)[1].upper() == extension.upper():
                 yield fp
 
@@ -97,12 +146,12 @@ class Search:
         :return: absolute file or folder path
         """
         pattern = re.compile(regex, re.IGNORECASE)
-        for fp in _FPath(path_in).path_generator(search_type=search_type, recursive=recursive):
+        for fp in Mapper(path_in).path_generator(search_type=search_type, recursive=recursive):
             if pattern.match(fp):
                 yield fp
 
 
-class PathList:
+class Sorter:
     def __init__(self, path_list):
         self.pth_lst = path_list
 
@@ -115,41 +164,62 @@ class PathList:
             yield fp
 
 
-def _create_dummy(dir_in, depth=2, count=5):
-    """
-    テスト用のダミーファイルとダミーフォルダを作成する。
-    :param dir_in: ダミー作成用のルートディレクトリ
-    :param depth: サブディレクトリ作成時の再帰コールの制限数
-    :param count: 各階層で子要素の作成数
-    :return: 無し
-    """
-    # 渡されたパスがフォルダの場合、フォルダを削除して空フォルダを再構築する。
-    if os.path.isdir(dir_in):
-        shutil.rmtree(dir_in)
-        os.makedirs(dir_in)
-    else:
-        raise ValueError(f'Path {dir_in} does not exist.')
+class Dummy:
+    @staticmethod
+    def create_tree(dir_in, depth=2, count=5):
+        """
+        テスト用のダミーファイルとダミーフォルダを作成する。
+        :param dir_in: ダミー作成用のルートディレクトリ
+        :param depth: サブディレクトリ作成時の再帰コールの制限数
+        :param count: 各階層で子要素の作成数
+        :return: 無し
+        """
+        # 渡されたパスがフォルダの場合、フォルダを削除して空フォルダを再構築する。
+        if os.path.isdir(dir_in):
+            shutil.rmtree(dir_in)
+            os.makedirs(dir_in)
+        else:
+            raise ValueError(f'Path {dir_in} does not exist.')
 
-    # ループ
-    for i in range(count):
-        # 現在の位置確認
-        print(f'depth={depth}, index={i}')
-        # ファイルを作成
-        for ext in ['.txt', '.csv', '.tsv', '_']:
-            fp = os.path.join(dir_in, f'{depth}-{i}{ext}')
-            with open(fp, 'w') as f:
-                f.write('x')
+        # ループ
+        for i in range(count):
+            # 現在の位置確認
+            print(f'depth={depth}, index={i}')
+            # ファイルを作成
+            for ext in ['.txt', '.csv', '.tsv', '_']:
+                fp = os.path.join(dir_in, f'{depth}-{i}{ext}')
+                with open(fp, 'w') as f:
+                    f.write('x')
 
-        # フォルダを作成
-        if depth > 0:
-            dp = os.path.join(dir_in, f'{depth}-{i}')
-            os.makedirs(dp)
-            # 再帰
-            _create_dummy(dp, depth=depth-1, count=count)
+            # フォルダを作成
+            if depth > 0:
+                dp = os.path.join(dir_in, f'{depth}-{i}')
+                os.makedirs(dp)
+                # 再帰
+                Dummy.create_tree(dp, depth=depth-1, count=count)
+
+    @staticmethod
+    def create_file_by_size(dir_in, file_name='dummy.dat', file_size=1024*1024):
+        """
+        指定したサイズのダミーファイルを作成する。
+        :param dir_in: 親フォルダ
+        :param file_name: ファイルの名称
+        :param file_size: ファイルのサイズ
+        1KB = 1024
+        1MB = 1024 * 1024
+        1GB = 1024 * 1024 * 1024
+        :return: 無し
+        """
+        fp = os.path.join(dir_in, file_name)
+        with open(fp, 'wb') as f:
+            f.seek(file_size)
+            f.write(b'/0')
+        print(f'File {fp} has been created.')
+        print(f'File size is {os.path.getsize(fp)}.')
 
 
 def _test():
-    pass
+    Prompt(msg='D&D Your File: ').get_file()
 
 
 if __name__ == '__main__':
