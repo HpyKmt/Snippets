@@ -8,6 +8,9 @@ import time
 from functools import partial
 
 
+__version__ = '0.0.0'
+
+
 class Cli:
     """ Base """
     WIDTH = 80
@@ -262,6 +265,30 @@ Create SendTo batch script"""
         SendTo.bat_sendto()
 
 
+class CliGrep(Cli):
+    """ Grep """
+    # =============================================
+    # From here:
+    #   List of functions to be called from prompt/loop
+
+    # staticmethodにしてしまうと、Cliクラスのexe_cmdの実行でエラーになる。
+    # PyCharmはフラグを立てるが、インスタンスメソッドにしておくこと。
+    def tip(self):
+        """Tip
+Display helpful regular expression tips"""
+        Grep.tip()
+
+    # staticmethodにしてしまうと、Cliクラスのexe_cmdの実行でエラーになる。
+    # PyCharmはフラグを立てるが、インスタンスメソッドにしておくこと。
+    def test_rgx(self):
+        """TestRgx
+Test regular expression"""
+        Grep.get_regex()
+
+    def grep(self):
+        Grep.grep(path_in=self.path_in, dir_out=self.dir_out)
+
+
 class CliTop(Cli):
     """ Top """
 
@@ -302,6 +329,13 @@ Copy files"""
                     cls_fnc_lst=[CliCopy.by_regex,
                                  CliCopy.by_modified_date])
 
+    def grep(self):
+        """Grep
+Regular Expression search"""
+        self.launch(cls=CliGrep,
+                    cls_fnc_lst=[CliGrep.tip,
+                                 CliGrep.test_rgx])
+
     def misc(self):
         """Misc
 Features you don not use everyday"""
@@ -323,7 +357,8 @@ def entry():
                                       CliTop.dummy,
                                       CliTop.delete,
                                       CliTop.copy,
-                                      CliTop.misc])
+                                      CliTop.misc,
+                                      CliTop.grep])
     top.print_help()
     top.prompt()
 

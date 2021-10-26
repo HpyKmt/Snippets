@@ -1,3 +1,6 @@
+"""
+
+"""
 import os
 import shutil
 import re
@@ -6,6 +9,7 @@ from collections import Counter
 import sys
 
 from lxml import etree
+import pandas as pd
 
 
 __version__ = '0.0.0'
@@ -47,7 +51,6 @@ class Prompt:
         else:
             return Prompt(self.msg).get_dir()
 
-
     def get_file_or_dir(self):
         while True:
             path_in = input(self.msg).replace('"', '')
@@ -60,7 +63,7 @@ class Prompt:
             else:
                 print(f'ERROR: {path_in} is not a valid directory path!')
 
-    def get_regex(self):
+    def get_regex_i(self):
         # ファイルパスをフィルターする為の簡易正規表現で、大文字小文字の区別はしない。
         while True:
             expr = input(self.msg)
@@ -74,6 +77,7 @@ class Prompt:
             else:
                 print('re.compile() was successful')
                 return ptn
+
 
     def get_dt(self):
         while True:
@@ -241,15 +245,13 @@ class Filter:
 
 
 class Sorter:
-    def __init__(self, path_list):
-        self.pth_lst = path_list
-
-    def sort_by_date_modified(self):
+    @staticmethod
+    def sort_by_date_modified(fp_gen):
         """
         Sort path by file modified date in ascending order
         :return: yield a path
         """
-        for m_time, fp in sorted([(os.path.getmtime(fp), fp) for fp in self.pth_lst]):
+        for m_time, fp in sorted([(os.path.getmtime(fp), fp) for fp in fp_gen]):
             yield fp
 
 
@@ -581,24 +583,27 @@ class SendTo:
         fp_bat = os.path.join(dir_sendto, fn_bat)
         # %Arg1%：SendToの場合は右クリックしたファイルもしくはフォルダ
         script = fr"""@echo off
-    rem python accepts both slash and backslash as path separator.
-    set "Python="{fp_python}""
-    set "Script="{fp_module}""
-    set "Arg1=%1"
-    set Statement=%Python% %Script% %Arg1%
-    %Statement%
-    pause
-    """
+rem python accepts both slash and backslash as path separator.
+set "Python="{fp_python}""
+set "Script="{fp_module}""
+set "Arg1=%1"
+set Statement=%Python% %Script% %Arg1%
+%Statement%
+pause
+"""
         # ファイルへの書き込み
         with open(fp_bat, 'w') as f:
             f.write(script)
+        # 完了報告
+        print(f'{fp_bat} was created.')
+        print(script)
 
 
 class Copy:
     @staticmethod
     def copy_files_by_regex(dir_in, dir_out):
         # ユーザー入力
-        pattern = Prompt('Regular Expression: ').get_regex()
+        pattern = Prompt('Regular Expression: ').get_regex_i()
 
         for fp_in in Filter.by_regex(dir_in, pattern=pattern, search_type='file', recursive=True):
             PathRelative(dir_in, fp_in, dir_out).make_dirs_and_copy()
@@ -628,7 +633,7 @@ class Delete:
 
     @staticmethod
     def delete_files_by_regex(dir_in):
-        pattern = Prompt('Regular expression to filter files: ').get_regex()
+        pattern = Prompt('Regular expression to filter files: ').get_regex_i()
         for fp in Filter.by_regex(dir_in, pattern=pattern, search_type='file', recursive=True):
             try:
                 os.remove(fp)
@@ -658,8 +663,144 @@ File Size   : {file_size:>16,}
 Folder Count: {dir_count:>16,}""")
 
 
+class Grep:
+    @staticmethod
+    def tip():
+        print('Regular Expression Tips'.center(50, '='))
+        print(r"""https://docs.python.org/3/library/re.html
+
+Inline Flags
+    ====================   =======
+    re.A   re.ASCII        ?a
+    re.I   re.IGNORECASE   ?i
+    re.L   re.LOCALE       ?L
+    re.M   re.MULTILINE    ?m
+    re.S   re.DOTALL       ?s
+    re.X   re.VERBOSE      ?x
+
+Typical Group Expressions
+    Bracket 
+    \[([^\]]+)\]
+    
+    Parenthesis
+    \(([^\)]+)\)
+    
+    Integer
+    (-\d+|\d+)
+    
+    Hex
+    ((0x[0-9a-fA-F]+|[0-9a-fA-F]+))
+""")
+
+    @staticmethod
+    def get_regex():
+        # 各フラグのON/OFFを確認する。
+        def check_flags():
+            print(' Flags '.center(40, '='))
+            for flg in [re.I, re.M, re.S, re.L, re.X, re.A]:
+                print('\t{0:<20}: {1}'.format(flg, bool(flg & ptn.flags)))
+
+        # グループ数を確認する。
+        def check_group():
+            print(' Groups '.center(40, '='))
+            print(f'Group Count: {ptn.groups}')
+            print(f'Group Index: {ptn.groupindex}')
+
+        # Compile()でフラグは立てない。
+        # ユーザーにInline Flagを表現してもらう。
+        while True:
+            expr = input('Input regular expression: ')
+            try:
+                ptn = re.compile(expr)
+            except re.error as e:
+                print('ERROR: failed to compile regular expression!')
+                print(e)
+                sys.exit()
+            else:
+                print('re.compile() was successful')
+                check_flags()
+                check_group()
+                if Prompt('Is this regular expression good?'):
+                    return ptn
+                else:
+                    print('Try again...')
+
+    # ファイルパスのジェネレータ
+    @staticmethod
+    def fp_generator(path_in):
+        # ファイルの場合
+        if os.path.isfile(path_in):
+            yield path_in
+        # フォルダの場合
+        elif os.path.isdir(path_in):
+            # 正規表現でフィルタ
+            ptn = Prompt('Regex to filter files: ').get_regex_i()
+            gen = Filter.by_regex(path_in=path_in, pattern=ptn)
+            # ファイルタイムスタンプで並べ替え
+            if Prompt('Sort by date?').get_yes_no():
+                gen = Sorter.sort_by_date_modified(gen)
+            # 返す
+            for fp in gen:
+                yield fp
+        # 入力が不正の場合はNoneを返す。
+        else:
+            yield None
+
+    @staticmethod
+    def get_columns(expected_length):
+        while True:
+            columns = Prompt('Column names sep by space: ').get_list()
+            if len(columns) == expected_length:
+                return columns
+            else:
+                print('Input Error: The column count does not agree regular expression group count!')
+
+    @staticmethod
+    def grep(path_in, dir_out):
+        # ファイルを読み込み時のエンコーディングを設定する。
+        encoding = input('encoding: ')
+
+        # テキスト抽出用の正規表現を設定する。
+        ptn = Grep.get_regex()
+
+        # ループ
+        data = []
+        for fp in Grep.fp_generator(path_in):
+            print(f'\r{fp}', end='')
+            with open(fp, 'r', encoding=encoding, errors='ignore') as f:
+                data.extend(ptn.findall(f.read()))
+
+        # グループ設定による分岐
+        grp_cnt = ptn.groups
+        # グループ設定無し
+        if grp_cnt == 0:
+            fp_out = os.path.join(dir_out, 'grep.txt')
+            with open(fp_out, 'w') as f:
+                f.write('\n'.join(data))
+                print(f'Created {fp_out}.')
+        # グループ設定有り
+        elif grp_cnt > 0:
+            columns = Grep.get_columns(expected_length=grp_cnt)
+            df = pd.DataFrame(data=data, columns=columns)
+            fp_out = os.path.join(dir_out, 'grep.csv')
+            df.to_csv(fp_out)
+            print(f'Created {fp_out}')
+
+
+class Scramble:
+    # TODO パスワード等を保存するテキストファイルをエンコード・デコードし、スクロールテキストWidget上で編集保存できるようにする。
+    # TODO ランダムな文字列も作る。
+    pass
+
+
+class Zip:
+    # TODO 拡張子を「z0-~z255」にする。数字は各バイトのオフセット数を示す。
+    # TODO 通常のZipでZipSubDirも処理できるようにする。
+    pass
+
+
 def _test():
-    Count.count_files(r'C:\_seus\work\temp')
+    pass
 
 
 if __name__ == '__main__':
