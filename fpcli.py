@@ -8,7 +8,10 @@ import time
 from functools import partial
 
 
-__version__ = '0.0.0'
+# 0.0.0 Original
+# 0.0.1 Fixed bug on grep
+# 0.1.0 CliGrep.create_rgx() を追加
+__version__ = '0.1.0'
 
 
 class Cli:
@@ -274,7 +277,7 @@ class CliGrep(Cli):
     # staticmethodにしてしまうと、Cliクラスのexe_cmdの実行でエラーになる。
     # PyCharmはフラグを立てるが、インスタンスメソッドにしておくこと。
     def tip(self):
-        """Tip
+        """RgxTip
 Display helpful regular expression tips"""
         Grep.tip()
 
@@ -285,7 +288,16 @@ Display helpful regular expression tips"""
 Test regular expression"""
         Grep.get_regex()
 
-    def grep(self):
+    # staticmethodにしてしまうと、Cliクラスのexe_cmdの実行でエラーになる。
+    # PyCharmはフラグを立てるが、インスタンスメソッドにしておくこと。
+    def create_rgx(self):
+        """CreateRgx
+Create regular expression template based on sample entry"""
+        Grep.create_regex()
+
+    def grep_files(self):
+        """GrepFiles
+Grep the search result to file"""
         Grep.grep(path_in=self.path_in, dir_out=self.dir_out)
 
 
@@ -334,7 +346,9 @@ Copy files"""
 Regular Expression search"""
         self.launch(cls=CliGrep,
                     cls_fnc_lst=[CliGrep.tip,
-                                 CliGrep.test_rgx])
+                                 CliGrep.test_rgx,
+                                 CliGrep.create_rgx,
+                                 CliGrep.grep_files])
 
     def misc(self):
         """Misc

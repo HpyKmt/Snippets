@@ -12,7 +12,10 @@ from lxml import etree
 import pandas as pd
 
 
-__version__ = '0.0.0'
+# 0.0.0 Original
+# 0.0.1 Fixed bug on grep
+# 0.1.0 Grep.create_regex()を追加
+__version__ = '0.1.0'
 
 
 class Prompt:
@@ -666,6 +669,7 @@ Folder Count: {dir_count:>16,}""")
 class Grep:
     @staticmethod
     def tip():
+        # 新しいノウハウを学んだら、ここに書き込みたい。
         print('Regular Expression Tips'.center(50, '='))
         print(r"""https://docs.python.org/3/library/re.html
 
@@ -689,11 +693,14 @@ Typical Group Expressions
     (-\d+|\d+)
     
     Hex
-    ((0x[0-9a-fA-F]+|[0-9a-fA-F]+))
+    (0x[0-9a-fA-F]+|[0-9a-fA-F]+)
 """)
 
     @staticmethod
     def get_regex():
+        # 文字列検索用の正規表現を設定してもらう。
+        # 複雑で長い表現が必要な場合は、他の機能を使って、前もって正しい正規表現を作成しておくこと。
+
         # 各フラグのON/OFFを確認する。
         def check_flags():
             print(' Flags '.center(40, '='))
@@ -748,12 +755,41 @@ Typical Group Expressions
 
     @staticmethod
     def get_columns(expected_length):
+        # DataFrameのcolumnsをユーザーに設定してもらう。
         while True:
-            columns = Prompt('Column names sep by space: ').get_list()
+            columns = Prompt('Column names split by space: ').get_list()
             if len(columns) == expected_length:
                 return columns
             else:
                 print('Input Error: The column count does not agree regular expression group count!')
+
+    @staticmethod
+    def create_regex():
+        # サンプル入力を元に正規表現を作成する。
+        # 連続的にre.sub()を実行すると、先行の正規表現の表現を後続の正規表現が上書きしてしまう。
+        # 想定外の上書きを防ぐために、特殊な文字列に一旦、仮変換する必要があり、変換表を辞書で確保する。
+        # 仮変換は「★★★名称★★★」とし、この「名称」はプロンプトで使われる。
+        rgx_dct = {'\[([^\]]+)\]': '★★★Bracket★★★',
+                   '\(([^\)]+)\)': '★★★Parenthesis★★★'}
+
+        # ユーザーがらサンプルデータを入力してもらう。
+        sample = input('Sample Text: ')
+
+        # ユーザーに確認しつつ、仮変換を進める。
+        for k, v in rgx_dct.items():
+            name = v.replace('★★★', '')
+            if Prompt(f'Replace {name}').get_yes_no():
+                sample = re.sub(k, v, sample)
+
+        # 仮変換を本当の正規表現に変換する。
+        for k, v in rgx_dct.items():
+            if v in sample:
+                sample = sample.replace(v, k)
+
+        # 変換結果を出力する。
+        # ユーザーはこの出力を必要に応じて編集する。
+        # 必要ないグループが存在すれば、「.*」で表現を省略する。
+        print(f'result: {sample}')
 
     @staticmethod
     def grep(path_in, dir_out):
@@ -769,6 +805,7 @@ Typical Group Expressions
             print(f'\r{fp}', end='')
             with open(fp, 'r', encoding=encoding, errors='ignore') as f:
                 data.extend(ptn.findall(f.read()))
+        print('\n')
 
         # グループ設定による分岐
         grp_cnt = ptn.groups
