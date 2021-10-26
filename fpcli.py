@@ -1,6 +1,3 @@
-"""
-Command Line Interface of fpath.py
-"""
 from fpath import *
 import sys
 import pprint
